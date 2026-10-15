@@ -6,44 +6,42 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-echo -e "${GREEN}=== Arch Linux Live: Full Base + GUI Prep Setup ===${NC}"
+echo -e "${GREEN}=== Arch Linux Live: Full Base + GUI Prep Setup (Fixed) ===${NC}"
 echo ""
 
-# Проверка: только root и только в live
-if [[ $(id -u) -ne 0 ]]; then
-  echo -e "${RED}Ошибка: запускай от root (sudo не нужен в live).${NC}"
+if [[ \$(id -u) -ne 0 ]]; then
+  echo -e "${RED}Ошибка: запускай от root.${NC}"
   exit 1
 fi
-if [[ "$(hostname)" != "archiso" ]]; then
+if [[ "\$(hostname)" != "archiso" ]]; then
   echo -e "${YELLOW}Предупреждение: скрипт рассчитан на Arch Linux live USB.${NC}"
 fi
 
 read -p "Введи имя диска для установки (например, /dev/sda или /dev/nvme0n1): " DISK
-if [[ ! "$DISK" =~ ^/dev/ ]]; then
+if [[ ! "\$DISK" =~ ^/dev/ ]]; then
   echo -e "${RED}Некорректное имя диска.${NC}"
   exit 1
 fi
 
-echo "Разметка диска $DISK (EFI + root)..."
-sgdisk --zap-all "$DISK"
-sgdisk -n 1::+512M -t 1:EF00 -c 1:"EFI" "$DISK"
-sgdisk -n 2::0   -t 2:8300 -c 2:"root" "$DISK"
+echo "Разметка диска \$DISK (EFI + root)..."
+sgdisk --zap-all "\$DISK"
+sgdisk -n 1::+512M -t 1:EF00 -c 1:"EFI" "\$DISK"
+sgdisk -n 2::0   -t 2:8300 -c 2:"root" "\$DISK"
 
 echo "Форматирование разделов..."
-mkfs.fat -F32 "${DISK}1"
-mkfs.ext4 "${DISK}2"
+mkfs.fat -F32 "\${DISK}1"
+mkfs.ext4 "\${DISK}2"
 
 echo "Монтирование файловых систем..."
-mount "${DISK}2" /mnt
+mount "\${DISK}2" /mnt
 mkdir -p /mnt/boot
-mount "${DISK}1" /mnt/boot
+mount "\${DISK}1" /mnt/boot
 
 echo "Установка пакетов: base, linux, grub, GUI deps..."
 pacstrap /mnt base base-devel linux linux-firmware grub efibootmgr networkmanager sudo nano git
 
 genfstab -U /mnt >> /mnt/etc/fstab
 
-# Базовая настройка в chroot
 arch-chroot /mnt <<'EOF_CHROOT'
 echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
 echo "ru_RU.UTF-8 UTF-8" >> /etc/locale.gen
@@ -59,9 +57,8 @@ grub-mkconfig -o /boot/grub/grub.cfg
 systemctl enable NetworkManager
 EOF_CHROOT
 
-echo "Подготовка GUI‑конфигов в /etc/skel (автокопирование в $HOME нового пользователя)..."
+echo "Подготовка GUI‑конфигов в /etc/skel..."
 
-# Создаём структуру /etc/skel/.config
 mkdir -p /mnt/etc/skel/.config/bspwm
 mkdir -p /mnt/etc/skel/.config/sxhkd
 mkdir -p /mnt/etc/skel/.config/polybar
@@ -70,19 +67,17 @@ mkdir -p /mnt/etc/skel/.config/alacritty
 mkdir -p /mnt/etc/skel/.config/picom
 mkdir -p /mnt/etc/skel/.local/share/polybar-icons
 
-# bspwmrc
 cat > /mnt/etc/skel/.config/bspwm/bspwmrc <<'EOF'
 bspc config focus_follows_pointer true
 bspc config pointer_follows_window true
 bspc config border_width 2
 bspc config window_gap 8
 bspc monitor -d 1 2 3 4 5 6 7 8 9 0
-for m in $(bspc query -M); do
-    polybar --monitor="$m" main &
+for m in \$(bspc query -M); do
+    polybar --monitor="\$m" main &
 done
 EOF
 
-# sxhkdrc
 cat > /mnt/etc/skel/.config/sxhkd/sxhkdrc <<'EOF'
 super + Return
     alacritty
@@ -98,7 +93,6 @@ super + m
     bspc node -f -c 'state=monocle'
 EOF
 
-# picom.conf (с прозрачностью polybar)
 cat > /mnt/etc/skel/.config/picom/picom.conf <<'EOF'
 shadow = true;
 shadow-radius = 12;
@@ -113,13 +107,12 @@ opacity-rule = [
 ];
 EOF
 
-# Скачиваем темы и кладём их в /etc/skel (чтобы при создании пользователя они были готовы)
 echo "Скачивание тем (polybar Shapes, rofi Type‑3, alacritty Tokyo Night)..."
 
 git clone --depth 1 https://github.com/adi1090x/polybar-themes.git /tmp/polybar-themes-repo
-cp -r /tmp/polybar-themes-repo/shapes/* /mnt/etc/skel/.config/polybar/
-if [ -d /tmp/polybar-themes-repo/shapes/icons ]; then
-  cp -r /tmp/polybar-themes-repo/shapes/icons/* /mnt/etc/skel/.local/share/polybar-icons/
+cp -r /tmp/polybar-themes-repo/collection/shapes/* /mnt/etc/skel/.config/polybar/
+if [ -d /tmp/polybar-themes-repo/collection/shapes/icons ]; then
+  cp -r /tmp/polybar-themes-repo/collection/shapes/icons/* /mnt/etc/skel/.local/share/polybar-icons/
 fi
 
 git clone --depth 1 https://github.com/orkhasnat/rofi-themes.git /tmp/rofi-themes-repo
@@ -131,7 +124,6 @@ done
 git clone --depth 1 https://github.com/zatchheems/tokyo-night-alacritty-theme.git /tmp/alacritty-themes-repo
 cp /tmp/alacritty-themes-repo/tokyo-night.yml /mnt/etc/skel/.config/alacritty/alacritty.yml
 
-# Создаём .desktop для сессии bspwm (видно в любом DM)
 tee /mnt/usr/share/xsessions/bspwm.desktop > /dev/null <<'EOF'
 [Desktop Entry]
 Name=BSPWM
@@ -142,21 +134,15 @@ Type=Application
 EOF
 
 echo ""
-echo -e "${GREEN}=== Базовая система и подготовка GUI завершены! ===${NC}"
+echo -e "${GREEN}=== Готово! ===${NC}"
 echo ""
-echo "Теперь нужно:"
 echo "1. Перезагрузи ПК, выбери диск в BIOS/UEFI."
 echo "2. Зайди как root (пароль: root)."
-echo "3. Создай обычного пользователя:"
+echo "3. Создай пользователя:"
 echo "     useradd -m -G wheel -s /bin/bash username"
 echo "     passwd username"
 echo "4. Выйди из root, войди под обычным пользователем."
-echo ""
-echo -e "${YELLOW}Важно:${NC}"
-echo "Конфиги bspwm, sxhkd, polybar, rofi, alacritty и picom"
-echo "автоматически скопированы в твой $HOME благодаря /etc/skel."
-echo ""
 echo "5. В дисплейном менеджере выбери сессию BSPWM."
-echo "6. Проверь горячие клавиши: Super+Return (терминал), Super+D (rofi)."
 echo ""
-echo "Если polybar не виден — сделай killall polybar, он перезапустится."
+echo "Конфиги bspwm, sxhkd, polybar, rofi, alacritty и picom"
+echo "автоматически скопированы в твой \$HOME благодаря /etc/skel."
