@@ -9,10 +9,6 @@ NC='\033[0m'
 echo -e "${GREEN}=== Arch Linux Live: Full Base + GUI Prep Setup (Fixed) ===${NC}"
 echo ""
 
-if [[ \$(id -u) -ne 0 ]]; then
-  echo -e "${RED}Ошибка: запускай от root.${NC}"
-  exit 1
-fi
 if [[ "\$(hostname)" != "archiso" ]]; then
   echo -e "${YELLOW}Предупреждение: скрипт рассчитан на Arch Linux live USB.${NC}"
 fi
