@@ -18,8 +18,6 @@ NC='\033[0m'
 
 echo -e "${GREEN}=== Начало полной установки Arch Linux + BSPWM (Tokio‑Night) ===${NC}"
 echo -e "${RED}ВНИМАНИЕ: Диск ${DISK} будет полностью стёрт!\${NC}"
-read -p "Продолжить? (yes/no): " confirm
-[[ "\$confirm" != "yes" ]] && echo "Отменено." && exit 1
 
 # 1. Разметка диска (GPT, UEFI)
 echo -e "${YELLOW}[1/12] Разметка диска (GPT, UEFI)...${NC}"
