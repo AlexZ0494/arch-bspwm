@@ -1,84 +1,58 @@
 #!/bin/bash
 
-# --- ПЕРЕМЕННЫЕ (ИЗМЕНИТЕ ПОД СЕБЯ) ---
-# Диск для установки (ВНИМАНИЕ! ВСЕ ДАННЫЕ БУДУТ УДАЛЕНЫ)
-DISK="/dev/sda" 
-# Имя пользователя
-USERNAME="archuser" 
-# Пароль пользователя (лучше поменять после установки)
-USERPASS="archlinux" 
-# Пароль root
-ROOTPASS="root" 
+# --- НАСТРОЙКИ (ИЗМЕНИТЕ ПЕРЕД ЗАПУСКОМ) ---
+DISK="/dev/sda"          # Диск для установки (ВНИМАНИЕ! ВСЕ ДАННЫЕ БУДУТ СТЕРТЫ)
+USERNAME="archuser"      # Имя пользователя
+USERPASS="archlinux"     # Пароль пользователя
+ROOTPASS="root"          # Пароль root
+TIMEZONE="Europe/Moscow" # Часовой профиль
 
-# --- 1. НАСТРОЙКА ИНТЕРНЕТА И ВРЕМЕНИ ---
-echo "Синхронизация времени..."
+# --- ЦВЕТОВАЯ СХЕМА TOKIO-NIGHT ---
+BG="#1a1b26"
+FG="#c0caf5"
+PINK="#bb9af7"
+BLUE="#7aa2f7"
+YELLOW="#e0af68"
+GREEN="#9ece6a"
+RED="#f7768e"
+CYAN="#7dcfff"
+
+echo "1. Синхронизация времени..."
 timedatectl set-ntp true
 
-echo "Проверка интернет-соединения..."
-ping -c 3 archlinux.org > /dev/null
-if [ $? -ne 0 ]; then
-    echo "Ошибка: Нет интернета. Подключитесь через wifi-menu или systemd-networkd."
-    exit 1
-fi
-
-# --- 2. РАЗМЕТКА ДИСКА И ФОРМАТИРОВАНИЕ ---
-echo "Разметка диска $DISK..."
-# Используем GPT и один раздел (для простоты, можно добавить swap)
+echo "2. Разметка диска $DISK (GPT, 1 раздел)..."
 sgdisk --zap-all $DISK
 sgdisk -n 1:0:0 -t 1:8300 $DISK
-
-# Форматируем в ext4
-mkfs.ext4 "${DISK}1"
-
-# Монтируем
+mkfs.ext4 -F "${DISK}1"
 mount "${DISK}1" /mnt
 
-# --- 3. УСТАНОВКА БАЗОВОЙ СИСТЕМЫ ---
-echo "Установка базовой системы и ядра (это может занять 5-15 минут)..."
-pacstrap /mnt base base-devel linux-zen linux-firmware vim nano networkmanager git wget
-
-# Генерация fstab
+echo "3. Установка базовой системы (kernel-zen, base-devel, git)..."
+pacstrap /mnt base base-devel linux-zen linux-firmware vim networkmanager git wget curl
 genfstab -U /mnt >> /mnt/etc/fstab
 
-# --- 4. НАСТРОЙКА СИСТЕМЫ ЧЕРЕЗ ARCH-CHROOT ---
-echo "Копирование скрипта настройки внутрь системы для chroot..."
-cp "$0" /mnt/root/post_install.sh
-chmod +x /mnt/root/post_install.sh
+echo "4. Копирование скрипта внутрь системы для chroot..."
+cp "$0" /mnt/root/installer.sh
+chmod +x /mnt/root/installer.sh
 
-arch-chroot /mnt /root/post_install.sh "$USERNAME" "$USERPASS" "$ROOTPASS"
-
-# --- 5. ВЫХОД И ПЕРЕЗАГРУЗКА ---
-echo "Установка завершена. Выходим из chroot..."
-exit
-
-echo "Размонтируем диск..."
-umount -R /mnt
-
-echo "Установка завершена! Введите 'reboot' для перезагрузки."
-echo "Не забудьте извлечь USB-накопитель и настроить загрузчик (рекомендуется GRUB ниже)."
-
-# --- ВНУТРЕННИЙ СКРИПТ ДЛЯ ARCH-CHROOT ---
-exit 0
-EOF
-# ==============================================================================
-# НАЧАЛО ВНУТРЕННЕГО СКРИПТА (ТО, ЧТО ВЫПОЛНИТСЯ ВНУТРИ СИСТЕМЫ)
-# ==============================================================================
+echo "5. Вход в chroot и настройка системы..."
 arch-chroot /mnt /bin/bash << 'INNER_EOF'
 
-# Принимаем аргументы из внешнего скрипта
-USERNAME=$1
-USERPASS=$2
-ROOTPASS=$3
+# --- ПЕРЕДАЧА ПЕРЕМЕННЫХ ИЗ ВНЕШНЕГО СКРИПТА ---
+DISK="/dev/sda"
+USERNAME="archuser"
+USERPASS="archlinux"
+ROOTPASS="root"
+TIMEZONE="Europe/Moscow"
 
-echo "Локализация..."
-ln -sf /usr/share/zoneinfo/Europe/Moscow /etc/localdate
+# --- СИСТЕМНАЯ НАСТРОЙКА ---
+ln -sf /usr/share/zoneinfo/$TIMEZONE /etc/localtime
 hwclock --systohc
 sed -i 's/#$en_US.UTF-8 UTF-8$/\1/' /etc/locale.gen
 sed -i 's/#$ru_RU.UTF-8 UTF-8$/\1/' /etc/locale.gen
 locale-gen
 echo "LANG=en_US.UTF-8" > /etc/locale.conf
+echo "KEYMAP=ru" > /etc/vconsole.conf
 
-echo "Настройка сети..."
 echo "archhost" > /etc/hostname
 cat > /etc/hosts << EOH
 127.0.0.1   localhost
@@ -87,65 +61,140 @@ cat > /etc/hosts << EOH
 EOH
 
 systemctl enable NetworkManager
-
-echo "Создание пользователя..."
 useradd -m -G wheel -s /bin/bash $USERNAME
 echo "$USERNAME:$USERPASS" | chpasswd
 echo "root:$ROOTPASS" | chpasswd
-
-# Настройка sudo
 sed -i 's/# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
 
-# --- 6. УСТАНОВКА ГРАФИЧЕСКОГО СТЕКА И ВАШЕГО СОФТА ---
-echo "Установка графического сервера и компонентов..."
-pacman -S --noconfirm xorg-server xorg-xinit xorg-xrandr \
+# --- УСТАНОВКА СОФТА ---
+pacman -S --noconfirm --needed xorg-server xorg-xinit xorg-xrandr \
     bspwm sxhkd alacritty thunar dmenu picom feh \
-    polybar noto-fonts-cjk noto-fonts-emoji ttf-joypixels \
+    polybar noto-fonts ttf-joypixels \
     pulseaudio pulseaudio-alsa pavucontrol \
     network-manager-applet blueman \
-    git wget curl unzip
+    dunst unclutter
 
-# --- 7. НАСТРОЙКА КОНФИГОВ (bspwm, sxhkd, polybar) ---
-echo "Настройка конфигурации..."
-sudo -u $USERNAME mkdir -p /home/$USERNAME/.config/{bspwm,sxhkd,polybar,alacritty}
+# --- НАСТРОЙКА КОНФИГОВ ПОЛЬЗОВАТЕЛЯ ---
+sudo -u $USERNAME bash << 'USER_EOF'
+mkdir -p ~/.config/{bspwm,sxhkd,polybar,alacritty}
 
-# Копируем дефолтные конфиги bspwm и sxhkd
-sudo -u $USERNAME cp /usr/share/doc/bspwm/examples/bspwmrc /home/$USERNAME/.config/bspwm/
-sudo -u $USERNAME cp /usr/share/doc/bspwm/examples/sxhkdrc /home/$USERNAME/.config/sxhkd/
-sudo -u $USERNAME chmod +x /home/$USERNAME/.config/bspwm/bspwmrc
+# BSPWM
+cat > ~/.config/bspwm/bspwmrc << 'BSPWM_EOF'
+#!/bin/sh
+bspc monitor -d I II III IV V VI VII VIII IX X
+bspc config border_width 2
+bspc config window_gap 12
+bspc config split_ratio 0.52
+bspc config borderless_monocle true
+bspc config gapless_monocle true
+bspc rule -a Polybar state=above
+pkill -USR1 -x sxhkd
+BSPWM_EOF
 
-# (Здесь должен быть блок создания конфигов Polybar и Alacritty из предыдущего ответа)
-# Для краткости опускаем повторный ввод 200 строк конфига Polybar, 
-# но в реальном скрипте они должны быть сгенерированы через 'cat > file << EOF ...'
-# ВАЖНО: В конфиге Polybar убедитесь, что в exec_always или автозапуске указан путь к /home/$USERNAME/.config/polybar/launch.sh
+# SXHKD
+cat > ~/.config/sxhkd/sxhkdrc << 'SXHKD_EOF'
+super + Return
+    alacritty
+super + d
+    dmenu_run
+super + e
+    thunar
+super + shift + q
+    bspc node -c
+super + {_,shift + }{h,j,k,l}
+    bspc node -{f,s} {west,south,north,east}
+super + b
+    $HOME/.config/polybar/launch.sh
+SXHKD_EOF
 
-# --- 8. УСТАНОВКА ЗАГРУЗЧИКА (GRUB) ---
-echo "Установка загрузчика GRUB..."
-pacman -S --noconfirm grub efibootmgr
-# Если у вас BIOS/Legacy:
-grub-install --target=i386-pc $DISK
-# Если у вас UEFI (раскомментируйте и укажите точку монтирования EFI раздела, если он есть):
-# mkdir -p /boot/efi
-# mount /dev/sdaX /boot/efi
-# grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
+# ALACRITTY
+cat > ~/.config/alacritty/alacritty.yml << 'ALAC_EOF'
+window:
+  padding: {x: 8, y: 8}
+colors:
+  primary: {background: '0x1a1b26', foreground: '0xc0caf5'}
+  normal: {black: '0x15161e', red: '0xf7768e', green: '0x9ece6a', yellow: '0xe0af68', blue: '0x7aa2f7', magenta: '0xbb9af7', cyan: '0x7dcfff', white: '0xa9b1d6'}
+ALAC_EOF
 
-grub-mkconfig -o /boot/grub/grub.cfg
+# POLYBAR (Конфигурация согласно вашему запросу)
+mkdir -p ~/.config/polybar/themes
+git clone --depth 1 https://github.com/adi1090x/polybar-themes.git /tmp/polybar-themes
+cp -r /tmp/polybar-themes/shapes ~/.config/polybar/themes/
 
-# --- 9. ВКЛЮЧЕНИЕ СЛУЖБ И АВТОЗАПУСК ---
-echo "Включение автозапуска графической сессии..."
-# Создаем .xinitrc для пользователя
-sudo -u $USERNAME cat > /home/$USERNAME/.xinitrc << 'XINIT_EOF'
+cat > ~/.config/polybar/config << 'POLY_EOF'
+[colors]
+background = #1a1b26
+background-alt = #292e42
+foreground = #c0caf5
+primary = #bb9af7
+secondary = #7aa2f7
+alert = #f77686
+
+[bar/main]
+width = 100%
+height = 32
+background = ${background}
+foreground = ${foreground}
+modules-left = bspwm menu
+modules-center = xwindow
+modules-right = pulseaudio wlan xkeyboard date tray
+tray-position = right
+wm-restack = bspwm
+override-redirect = true
+font-0 = NotoSans-Regular:pixelsize=11;3
+
+[module/xwindow]
+type = internal/xwindow
+label = "%title%"
+label-background = ${background-alt}
+label-background-alpha = 0.8
+label-padding = 8
+
+[module/date]
+type = internal/date
+date = "%d-%m-%Y"
+time = "%H:%M"
+label = "%date% %time%"
+
+[module/menu]
+type = custom/text
+content = " "
+content-foreground = ${primary}
+click-left = "dmenu_run"
+POLY_EOF
+
+cat > ~/.config/polybar/launch.sh << 'LAUNCH_EOF'
+#!/bin/bash
+killall -q polybar
+while pgrep -u $UID -x polybar >/dev/null; do sleep 1; done
+polybar main &
+LAUNCH_EOF
+chmod +x ~/.config/polybar/launch.sh
+
+# XINITRC
+cat > ~/.xinitrc << 'XINIT_EOF'
 #!/bin/sh
 picom --config /dev/null --experimental-backends &
 dunst &
+unclutter --idle 3 &
 $HOME/.config/polybar/launch.sh
 exec bspwm
 XINIT_EOF
 
-sudo -u $USERNAME chmod +x /home/$USERNAME/.xinitrc
+USER_EOF
 
-# Включаем автозапуск X при логине (опционально, для автологина сложнее)
-# echo "startx" >> /home/$USERNAME/.bashrc
+# --- ЗАГРУЗЧИК (GRUB) ---
+pacman -S --noconfirm grub efibootmgr
+grub-install --target=i386-pc $DISK
+# Для UEFI (раскомментировать если нужно):
+# mkdir -p /boot/efi
+# mount /dev/sda1 /boot/efi
+# grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
+grub-mkconfig -o /boot/grub/grub.cfg
 
-echo "Внутренняя настройка завершена."
+echo "Установка завершена. Выйдите из chroot и перезагрузитесь."
 INNER_EOF
+
+echo "6. Очистка..."
+umount -R /mnt
+echo "Скрипт завершил работу. Введите 'reboot'."
