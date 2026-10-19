@@ -79,13 +79,32 @@ grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 EOF
 
-# 7. Установка пакетов для BSPWM и окружения
+# 7. Установка пакетов для BSPWM и окружения (внутри chroot)
 echo -e "${YELLOW}[7/12] Установка пакетов для BSPWM, Polybar, Alacritty...${NC}"
 arch-chroot /mnt pacman -S --noconfirm \
     xorg-server xorg-xinit xorg-twm xorg-xrdb \
     bspwm sxhkd polybar dmenu alacritty thunar feh picom \
     pulseaudio pulseaudio-alsa pulseaudio-equalizer \
-    ttf-jetbrains-mono noto-fonts noto-fonts-cjk noto-fonts-emoji
+    ttf-jetbrains-mono noto-fonts noto-fonts-cjk noto-fonts-emoji \
+    git \
+    arch-install-scripts
+
+# 8. Клонирование темы Tokio-Night и настройка конфигов (внутри chroot)
+echo -e "${YELLOW}[8/12] Клонирование темы Tokio-Night и настройка конфигов...${NC}"
+arch-chroot /mnt bash -c "
+set -euo pipefail
+cd /home/${USER}
+git clone https://github.com/marko-cerovac/tokio-night.git .config/tokio-night/theme
+chown -R ${USER}:${USER} /home/${USER}/.config
+
+# Копируем конфиги сразу внутри chroot, чтобы не путаться с путями /mnt
+cp -r .config/tokio-night/theme/alacritty/* .config/alacritty/ 2>/dev/null || true
+cp -r .config/tokio-night/theme/bspwm/* .config/bspwm/ 2>/dev/null || true
+cp -r .config/tokio-night/theme/sxhkd/* .config/sxhkd/ 2>/dev/null || true
+cp -r .config/tokio-night/theme/picom/* .config/picom/ 2>/dev/null || true
+cp -r .config/tokio-night/theme/polybar/* .config/polybar/ 2>/dev/null || true
+cp -r .config/tokio-night/theme/gtk/* .themes/Tokio-Night/ 2>/dev/null || true
+"
 
 # 8. Клонирование темы Tokio‑Night и копирование конфигов
 echo -e "${YELLOW}[8/12] Клонирование темы Tokio‑Night и настройка конфигов...${NC}"
