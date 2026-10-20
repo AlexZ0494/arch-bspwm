@@ -187,9 +187,9 @@ USER_EOF
 pacman -S --noconfirm grub efibootmgr
 grub-install --target=i386-pc $DISK
 # Для UEFI (раскомментировать если нужно):
-# mkdir -p /boot/efi
-# mount /dev/sda1 /boot/efi
-# grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
+mkdir -p /boot/efi
+mount /dev/sda1 /boot/efi
+grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 
 echo "Установка завершена. Выйдите из chroot и перезагрузитесь."
